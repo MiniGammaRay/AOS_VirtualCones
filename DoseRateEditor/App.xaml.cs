@@ -1,24 +1,20 @@
 ﻿using Autofac;
-using ControlzEx.Standard;
 using DoseRateEditor.Startup;
 using DoseRateEditor.ViewModels;
 using DoseRateEditor.Views;
 using System;
-using System.Collections.Generic;
 using System.Configuration;
-using System.Data;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
-using System.Threading.Tasks;
 using System.Windows;
 using VMS.TPS.Common.Model.API;
 using MessageBox = System.Windows.MessageBox;
 
 [assembly: ESAPIScript(IsWriteable = true)]
+
 namespace DoseRateEditor
 {
     /// <summary>
@@ -30,11 +26,10 @@ namespace DoseRateEditor
 
     /// </summary>
     // Allow script to edit patient data
-    
+
     public partial class App : System.Windows.Application
 
     {
-
         private VMS.TPS.Common.Model.API.Application _app;
         private MainView MV;
         private string _patientId;
@@ -49,17 +44,14 @@ namespace DoseRateEditor
             _app.Dispose();
 
             App.Current.Shutdown();
-
         }
 
         private void start(object sender, StartupEventArgs e)
         {
             using (_app = VMS.TPS.Common.Model.API.Application.CreateApplication())
             {
-
                 if (e.Args.Count() > 0 && !String.IsNullOrWhiteSpace(e.Args.First()))
                 {
-
                     _patientId = e.Args.First().Split(';').First().Trim('\"');
                 }
                 else
@@ -67,7 +59,6 @@ namespace DoseRateEditor
                     MessageBox.Show("Patient not specified at application start.");
                     App.Current.Shutdown();
                     return;
-
                 }
                 if (e.Args.First().Split(';').Count() > 1)
                 {
@@ -110,7 +101,6 @@ namespace DoseRateEditor
 
         private void Application_Startup(object sender, StartupEventArgs e)
         {
-            
             // Check for NOEXPIRE file
             var path = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             var noexp_path = Path.Combine(path, "NOEXPIRE");
@@ -148,7 +138,6 @@ namespace DoseRateEditor
             Configuration config = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
             bool EULAAgreed = config.AppSettings.Settings["EULAAgreed"].Value.ToLower() == "true";
 
-
             // Initial EULA agreement
             if (!EULAAgreed)
             {
@@ -160,11 +149,10 @@ namespace DoseRateEditor
                 {
                     Process.Start("notepad.exe", Path.Combine(path, "license.txt"));
                 }
-                
+
                 // Save that they have seen EULA
                 config.AppSettings.Settings["EULAAgreed"].Value = "true";
                 config.Save(ConfigurationSaveMode.Modified);
-                
             }
 
             // Display opening msg
@@ -189,7 +177,7 @@ namespace DoseRateEditor
                     if (res == MessageBoxResult.No)
                     {
                         App.Current.Shutdown();
-                        return;       
+                        return;
                     }
                 }
                 else if (isValidated)
@@ -206,6 +194,5 @@ namespace DoseRateEditor
             // If we make it this far start the app
             start(sender, e);
         }
-
     }
 }
