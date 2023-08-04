@@ -1112,6 +1112,8 @@ namespace DoseRateEditor.ViewModels
         private void InsertBeams()
         {
 
+
+
             if(SelectedBeamTemplate.BeamInfos.Count()==0)
             {
                 MessageBox.Show("There are no beams in the chosen template. Choose another and try again.",
@@ -1120,15 +1122,45 @@ namespace DoseRateEditor.ViewModels
                 return;
             }
 
+            string fieldErrorMessage = "The plan in Eclipse must contain a field, with:\n" +
+                    "*MLC of model type: Varian High Definition 120\n" +
+                    "*Energy\n" +
+                    "*Dose Rate\n" +
+                    "*Isocenter\n" +
+                    "*Machine";
+
+            if (SelectedPlan.Beams.Where(x=>!x.IsSetupField).Count()==0) 
+            {
+                MessageBox.Show(fieldErrorMessage,"Error!", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
             var firstBeam = SelectedPlan.Beams.First(x => !x.IsSetupField);
+
+            if(firstBeam.MLC == null || firstBeam.MLC.Model != "Varian High Definition 120")
+            {
+                MessageBox.Show(fieldErrorMessage, "Error!", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (firstBeam.EnergyModeDisplayName == null || firstBeam.EnergyModeDisplayName == "")
+            {
+                MessageBox.Show(fieldErrorMessage, "Error!", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
+            if (firstBeam.TreatmentUnit == null || firstBeam.TreatmentUnit.Id == "")
+            {
+                MessageBox.Show(fieldErrorMessage, "Error!", MessageBoxButton.OK, MessageBoxImage.Error);
+                return;
+            }
+
             var origBeams = SelectedPlan.Beams.ToList();
             var machine = firstBeam.TreatmentUnit.Id;
             var mlcId = firstBeam.MLC.Id;
             var isocenter = firstBeam.IsocenterPosition;
             var energyDisp = firstBeam.EnergyModeDisplayName;
             var doseRate = firstBeam.DoseRate;
-
-
 
             SelectedPlan.Course.Patient.BeginModifications();
             var removeBeamList = SelectedPlan.Beams.ToList();
