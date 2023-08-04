@@ -1,4 +1,6 @@
-﻿using DoseRateEditor.Models;
+﻿#define V161
+
+using DoseRateEditor.Models;
 using GalaSoft.MvvmLight.Command;
 using OxyPlot;
 using OxyPlot.Axes;
@@ -8,15 +10,20 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Configuration;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Remoting.Messaging;
 using System.Windows;
 using System.Windows.Input;
 using System.Xml.Serialization;
 using Talos.Models;
 using VMS.TPS.Common.Model.API;
+using VMS.TPS.Common.Model.Types;
 using static DoseRateEditor.Models.DRCalculator;
+
+//using static System.Net.WebRequestMethods;
 
 // TODO: Scale y axis to max DR
 // TODO: Color underline cb's as legend
@@ -55,6 +62,15 @@ namespace DoseRateEditor.ViewModels
         public ObservableCollection<PlanningItem> Plans { get; private set; }
         public ObservableCollection<Beam> Beams { get; private set; }
         public ObservableCollection<Tuple<Nullable<DRMethod>, Nullable<bool>>> DRMethods { get; private set; }
+
+        //settings file
+        private GapSettings _gapSettings;
+
+        public GapSettings GapSettings
+        {
+            get { return _gapSettings; }
+            set { SetProperty(ref _gapSettings, value); }
+        }
 
         // DR EDIT METHOD CREDIT TEXT
         private string _CreditText;
@@ -325,9 +341,18 @@ namespace DoseRateEditor.ViewModels
             set { SetProperty(ref _dMUf_series, value); }
         }
 
+        private Patient _selectedPatient;
+
+        public Patient SelectedPatient
+        {
+            get { return _selectedPatient; }
+            set { SetProperty(ref _selectedPatient, value); }
+        }
+
         public MainViewModel(VMS.TPS.Common.Model.API.Application app, Patient patient, Course course, PlanSetup plan)
         {
             _app = app;
+            _selectedPatient = patient;
 
             LoadBeamTemplates();
 
@@ -493,6 +518,51 @@ namespace DoseRateEditor.ViewModels
             OnSelectCourse();
             SelectedPlan = Plans.FirstOrDefault(x => x.Id == plan.Id) as ExternalPlanSetup;
             OnPlanSelect();
+
+            ImportSettings();
+        }
+
+        public void ImportSettings()
+        {
+            string filePath = Path.Combine(AppContext.BaseDirectory, "Settings.xml");
+
+            if (!File.Exists(filePath))
+            {
+                GapSettings defaultSettings = new GapSettings();
+                defaultSettings.EnableSlidingLeaf = true;
+                defaultSettings.GapSize = 2.1;
+                defaultSettings.X = 150;
+                defaultSettings.Y = 150;
+                defaultSettings.SlidingLeafGapSize = 2;
+
+                var serializer = new XmlSerializer(typeof(GapSettings));
+
+                try
+                {
+                    using (var writer = new StreamWriter(filePath))
+                    {
+                        serializer.Serialize(writer, defaultSettings);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(ex.Message);
+                }
+            }
+
+            if (File.Exists(filePath))
+            {
+                GapSettings = new GapSettings();
+                var serializer = new XmlSerializer(typeof(GapSettings));
+                using (var reader = new StreamReader(filePath))
+                {
+                    GapSettings = (GapSettings)serializer.Deserialize(reader);
+                }
+            }
+            else
+            {
+                MessageBox.Show("The settings.xml file does not exist.", "File Not Found", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private void OnHyperlink()
@@ -884,7 +954,7 @@ namespace DoseRateEditor.ViewModels
                 }
             }
 
-            DRCalc.CreateNewPlanWithMethod(SelectedMethod.Value);
+            DRCalc.CreateNewPlanWithMethod(SelectedMethod.Value, GapSettings);
             _app.SaveModifications();
 
             OnPlanSelect(); // Calling this so that the selected plan isn't disposed...
@@ -1017,8 +1087,6 @@ namespace DoseRateEditor.ViewModels
 
         private void DeleteBeamTemplate()
         {
-            MessageBox.Show($"{BeamTemplates.Count()}");
-
             if (MessageBox.Show("Are you sure you wish to delete the Beam Template?", "Delete?",
                 MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.No
                 )
@@ -1043,7 +1111,197 @@ namespace DoseRateEditor.ViewModels
 
         private void InsertBeams()
         {
-            throw new NotImplementedException();
+
+            if(SelectedBeamTemplate.BeamInfos.Count()==0)
+            {
+                MessageBox.Show("There are no beams in the chosen template. Choose another and try again.",
+                    "Error!",MessageBoxButton.OK, MessageBoxImage.Error);
+
+                return;
+            }
+
+            var firstBeam = SelectedPlan.Beams.First(x => !x.IsSetupField);
+            var origBeams = SelectedPlan.Beams.ToList();
+            var machine = firstBeam.TreatmentUnit.Id;
+            var mlcId = firstBeam.MLC.Id;
+            var isocenter = firstBeam.IsocenterPosition;
+            var energyDisp = firstBeam.EnergyModeDisplayName;
+            var doseRate = firstBeam.DoseRate;
+
+
+
+            SelectedPlan.Course.Patient.BeginModifications();
+            var removeBeamList = SelectedPlan.Beams.ToList();
+
+            foreach(var rb in removeBeamList)
+            {
+                SelectedPlan.RemoveBeam(rb);
+            }
+
+            string fluence = "";
+            if (energyDisp.ToUpper().Contains("FFF"))
+                fluence = "FFF";
+            if (energyDisp.ToUpper().Contains("SRS"))
+                fluence = "SRS";
+
+            var setEnergy = energyDisp;
+
+            if (fluence == "FFF")
+                setEnergy = setEnergy.Replace("-FFF", "");
+
+            foreach (var beam in SelectedBeamTemplate.BeamInfos)
+            {
+                GantryDirection direction = GantryDirection.None;
+                if (beam.GantryRotation == GantryRotation.CCW)
+                    direction = GantryDirection.CounterClockwise;
+                if (beam.GantryRotation == GantryRotation.CW)
+                    direction = GantryDirection.Clockwise;
+
+                string technique = "STATIC";
+                if (beam.TreatmentTechnique == TreatmentTechnique.SRS_ARC || beam.TreatmentTechnique == TreatmentTechnique.ARC)
+                    technique = "ARC";
+
+                var externalParams = new ExternalBeamMachineParameters(machine,
+                    setEnergy, doseRate, technique, fluence);
+
+                Beam field = null;
+
+                // add sample amount of control points for the beam before fitting the MLC
+                List<double> cps = new List<double>();
+
+                try
+                {
+                    if (!beam.IsSetup)
+                    {
+                        // VMAT
+                        if (beam.TreatmentTechnique == TreatmentTechnique.ARC)
+                        {
+                            for (int i = 0; i < 72; i++)
+                            {
+                                cps.Add(i);
+                            }
+
+                            double tableAngle = beam.Table ?? 0.0;
+
+                            field = SelectedPlan.AddVMATBeam(externalParams, cps, beam.Collimator.Value,
+                                beam.GantryStart.Value, beam.GantryStop ?? (beam.GantryStart ?? 0.0), direction, tableAngle, isocenter);
+
+                            if (field.TreatmentUnit.MachineScaleDisplayName.ToUpper().Equals("VARIAN IEC"))
+                            {
+                                tableAngle = ConvertBetweenIEC61217andVarianIEC(tableAngle);
+                                SelectedPlan.RemoveBeam(field);
+                                field = SelectedPlan.AddVMATBeam(externalParams, cps, beam.Collimator.Value,
+                                    beam.GantryStart.Value, beam.GantryStop ?? (beam.GantryStart ?? 0.0), direction, tableAngle, isocenter);
+                            }
+
+                            double JawX = GapSettings.X / 2;
+                            double JawY = GapSettings.Y / 2;
+
+                            var editParams = field.GetEditableParameters();
+                            editParams.SetJawPositions(new VRect<double>(-JawX,-JawY,JawX,JawY));
+                            field.ApplyParameters(editParams);
+
+
+
+                            if (field.MLC.Model == "Varian High Definition 120")
+                            {
+                                // Get the cps from beam
+                                var edits = field.GetEditableParameters();
+                                edits.SetAllLeafPositions(GetMLCLeafPositions(field.MLC.Model));
+                                field.ApplyParameters(edits);
+                            }
+                        }
+
+                        // SRS ARC
+                        if (beam.TreatmentTechnique == TreatmentTechnique.SRS_ARC)
+                        {
+                            for (int i = 0; i < 72; i++)
+                            {
+                                cps.Add(i);
+                            }
+
+                            double tableAngle = beam.Table ?? 0.0;
+                            field = SelectedPlan.AddVMATBeam(externalParams, cps, beam.Collimator.Value, beam.GantryStart.Value, beam.GantryStop ?? (beam.GantryStart ?? 0.0), direction, tableAngle, isocenter);
+                            if (field.TreatmentUnit.MachineScaleDisplayName.ToUpper().Equals("VARIAN IEC"))
+                            {
+                                tableAngle = ConvertBetweenIEC61217andVarianIEC(tableAngle);
+                                SelectedPlan.RemoveBeam(field);
+                                field = SelectedPlan.AddVMATBeam(externalParams, cps, beam.Collimator.Value, beam.GantryStart.Value, beam.GantryStop ?? (beam.GantryStart ?? 0.0), direction, tableAngle, isocenter);
+                            }
+
+
+
+                            double JawX = GapSettings.X / 2;
+                            double JawY = GapSettings.Y / 2;
+
+
+
+                            var editParams = field.GetEditableParameters();
+                            editParams.SetJawPositions(new VRect<double>(-JawX, -JawY, JawX, JawY));
+                            field.ApplyParameters(editParams);
+
+
+
+                            // Get the cps from beam
+                            var edits = field.GetEditableParameters();
+                            edits.SetAllLeafPositions(GetMLCLeafPositions(field.MLC.Model));
+                            field.ApplyParameters(edits);
+                        }
+                        try
+                        {
+                            field.Id = beam.BeamID;
+                        }
+                        catch (Exception ex)
+                        { MessageBox.Show(ex.Message);
+                        }
+                    }
+                    else
+                    {
+                    }
+                }
+                catch (Exception ex)
+                {
+                    //exception messagebox
+                    MessageBox.Show($"1254:{ex.Message}");
+
+                }
+
+                _app.SaveModifications();
+            }
+
+            _app.SaveModifications();
+
+            OnPlanSelect();
+            MessageBox.Show("The fields have been inserted.", "Complete!", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+
+        private float[,] GetMLCLeafPositions(string MLC_Model)
+        {
+            float negSide = 0;
+            float posSide = 0;
+
+            double halfGap = GapSettings.GapSize / 2;
+            negSide =(float)-halfGap;
+            posSide = (float)halfGap;
+
+            if (MLC_Model == "Varian High Definition 120")
+            {
+                // Build leaf bank
+                var leaves = new float[2, 60];
+                for (int i = 0; i < 60; i++)
+                {
+                    leaves[0, i] = -37.5F;
+                    leaves[1, i] = -37.5F;
+                }
+                leaves[0, 30] = negSide;
+                leaves[1, 30] = posSide;
+                leaves[0, 29] = negSide;
+                leaves[1, 29] = posSide;
+
+                return leaves;
+            }
+
+            return null;
         }
 
         private void CreateBeamTemplate()
@@ -1192,6 +1450,70 @@ namespace DoseRateEditor.ViewModels
             return null;
         }
 
+        public void WriteToFullLog(string message)
+        {
+            string callingMethodName = "NA";
+            try
+            {
+                // Get the stack trace for the current thread
+                StackTrace stackTrace = new StackTrace();
+                // Get the calling method from the stack trace (the method at index 1, since the method at index 0 is WriteToFullLog itself)
+                StackFrame callingFrame = stackTrace.GetFrame(1);
+                MethodBase callingMethod = callingFrame.GetMethod();
+                callingMethodName = callingMethod.Name;
+                //// Combine the calling method information with the message
+                //string fullMessage = $"{callingMethod.DeclaringType.FullName}.{callingMethod.Name}: {message}";
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                string executablePath = AppDomain.CurrentDomain.BaseDirectory;
+                string FullProgressLogPath = Path.Combine(executablePath, "FullLog.txt");
+                string line = $"{DateTime.Now},{callingMethodName}: {message}";
+
+                using (StreamWriter writer = new StreamWriter(FullProgressLogPath, true))
+                {
+                    writer.WriteLine(line);
+                }
+            }
+            catch
+            {
+            }
+        }
+
         #endregion <---MCB
+
+        #region <---Scale Conversions
+
+        public static double ConvertBetweenIEC61217andVarianIEC(double originalAngle)
+        {
+            double resultAngle = 360 - originalAngle;
+
+            if (resultAngle == 360)
+            {
+                return 0;
+            }
+
+            return resultAngle;
+        }
+
+        public static double ConvertBetweenIEC61217andVarianStandard(double originalAngle)
+        {
+            // Subtract the original angle from 180 to mirror it
+            double mirroredAngle = 180 - originalAngle;
+
+            // If the result is negative, add 360 to bring it within the 0-360 range
+            if (mirroredAngle < 0)
+            {
+                mirroredAngle += 360;
+            }
+
+            return mirroredAngle;
+        }
+
+        #endregion <---Scale Conversions
     }
 }

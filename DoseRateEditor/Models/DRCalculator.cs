@@ -1,38 +1,31 @@
-﻿using ControlzEx.Standard;
-using MahApps.Metro.IconPacks;
-using OxyPlot;
+﻿using OxyPlot;
 using System;
 using System.Collections.Generic;
-using System.Data.SqlTypes;
-using System.IO;
 using System.Linq;
-using System.Web.SessionState;
 using System.Windows;
-using System.Windows.Media.Animation;
 using VMS.TPS.Common.Model.API;
 using VMS.TPS.Common.Model.Types;
-using static DoseRateEditor.Models.Utils;
 
 namespace DoseRateEditor.Models
 {
     public class DRCalculator
     {
-        
         public delegate double func(double theta);
+
         public enum DRMethod
         {
             Sin,
             Bhaskara,
             Cosmic
-        // Juha
+            // Juha
         }
 
         private static string sincred = @"
 Richard A. Popple, Xingen Wu, Ivan A. Brezovich, James M. Markert
 , Barton L. Guthrie, Evan M. Thomas, Markus Bredel, John B. Fiveash,
-The virtual cone: A novel technique to generate 
+The virtual cone: A novel technique to generate
 spherical dose distributions using
-a multileaf collimator and standardized control-point 
+a multileaf collimator and standardized control-point
 sequence for small target radiation surgery,
 Advances in Radiation Oncology,
 Volume 3, Issue 3,
@@ -58,7 +51,6 @@ public static double BFFunc(double th_deg)
     else
     {
         return -1 * BFFunc(th_deg - 180);
-
     }
 }
 """;
@@ -66,7 +58,7 @@ public static double BFFunc(double th_deg)
         private static string cosstring = @"""
 public static double cosmicFunc(double th_deg)
 {
-    if(th_deg < 180) { 
+    if(th_deg < 180) {
         return (th_deg * (180 - th_deg)) / (90 * 90);
     }
     else
@@ -75,11 +67,12 @@ public static double cosmicFunc(double th_deg)
     }
 }
 """;
+
         private static string BF_cred = $"https://digitalcommons.ursinus.edu/cgi/viewcontent.cgi\n?article=1015&context=triumphs_calculus\n\n{bfstring}";
         private static string cosmic_cred = $"https://en.formulasearchengine.com/wiki\n/Small-angle_approximation\n\n{cosstring}";
 
         private static string juhacred = @"Method and apparatus to deliver therapeutic radiation to a patient using field geography-based dose optimization
-            Inventors: Juha Kauppinen Anthony Magliari Martin SABEL Amir Talakoub. 
+            Inventors: Juha Kauppinen Anthony Magliari Martin SABEL Amir Talakoub.
             (https://patents.google.com/patent/WO2022063684A1)";
 
         public static Dictionary<DRMethod, string> DRCredits = new Dictionary<DRMethod, string>
@@ -98,20 +91,20 @@ public static double cosmicFunc(double th_deg)
             denom -= 4 * theta * (Math.PI - theta);
             retval /= denom;
 
-            if(th_deg < 180)
+            if (th_deg < 180)
             {
                 return retval;
             }
             else
             {
                 return -1 * BFFunc(th_deg - 180);
-
             }
         }
 
         public static double cosmicFunc(double th_deg)
         {
-            if(th_deg < 180) { 
+            if (th_deg < 180)
+            {
                 return (th_deg * (180 - th_deg)) / (90 * 90);
             }
             else
@@ -120,11 +113,10 @@ public static double cosmicFunc(double th_deg)
             }
         }
 
-
         public string DRCreditsString;
         public Nullable<DRMethod> LastMethodCalculated;
 
-        private static func rad = (theta) => (theta * Math.PI)/180;
+        private static func rad = (theta) => (theta * Math.PI) / 180;
 
         private static func sinfunc = (theta) => Math.Sin(rad(theta));
         private static func BFfunc = (theta) => BFFunc(theta);
@@ -138,13 +130,13 @@ public static double cosmicFunc(double th_deg)
         };
 
         public Dictionary<string, List<DataPoint>> InitialDRs { get; set; }
-        
+
         public Dictionary<string, List<DataPoint>> InitialGSs { get; set; }
 
         public Dictionary<string, List<DataPoint>> InitialdMU { get; set; }
 
         public Dictionary<string, List<DataPoint>> FinalDRs { get; set; }
-        
+
         public Dictionary<string, List<double>> FinalMSWS { get; set; }
 
         public Dictionary<string, List<DataPoint>> FinalGSs { get; set; }
@@ -154,13 +146,14 @@ public static double cosmicFunc(double th_deg)
         private VMS.TPS.Common.Model.API.Application _app { get; set; }
 
         private ExternalPlanSetup Plan { get; set; }
+
         public DRCalculator(ExternalPlanSetup plan, VMS.TPS.Common.Model.API.Application app)
         {
             _app = app;
             Plan = plan;
 
             numbeams = Plan.Beams.Count();
-            
+
             // Compute the initial DR for each beam in the plan
             InitialDRs = new Dictionary<string, List<DataPoint>>();
             InitialGSs = new Dictionary<string, List<DataPoint>>();
@@ -172,7 +165,6 @@ public static double cosmicFunc(double th_deg)
 
             // Get gantry speed max and dr max from machine
 
-
             foreach (Beam b in Plan.Beams)
             {
                 var maxDR = b.DoseRate;
@@ -182,8 +174,7 @@ public static double cosmicFunc(double th_deg)
                 InitialdMU.Add(b.Id, tup.Item3);
             }
 
-            LastMethodCalculated = null; 
-            
+            LastMethodCalculated = null;
         }
 
         public void ClearFinal()
@@ -208,13 +199,13 @@ public static double cosmicFunc(double th_deg)
             }*/
 
             // Else compute and save Final DRS and GSs
-            foreach(Beam b in Plan.Beams)
+            foreach (Beam b in Plan.Beams)
             {
                 var msws_new = GenerateMSWS(b, Delagate_dictionary[method]);
                 FinalMSWS.Add(b.Id, msws_new); // store the msws
 
                 var gantry = new List<double>();
-                foreach(var cp in b.GetEditableParameters().ControlPoints)
+                foreach (var cp in b.GetEditableParameters().ControlPoints)
                 {
                     gantry.Add(cp.GantryAngle);
                 }
@@ -223,7 +214,6 @@ public static double cosmicFunc(double th_deg)
 
                 FinalDRs.Add(b.Id, dr_gs.Item1);
                 FinalGSs.Add(b.Id, dr_gs.Item2);
-            
             }
 
             // Set variabl LastCalcdMethod to show that we have the DR and GS for a final method
@@ -231,7 +221,7 @@ public static double cosmicFunc(double th_deg)
             DRCreditsString = DRCredits[method];
         }
 
-        private Tuple<List<DataPoint>, List<DataPoint>> ComputeDRFromMSWS(List<double> msws, double bm_meterset, List<double> gantry_angles, double gantry_speed_max=4.8, double DR_max=2400)
+        private Tuple<List<DataPoint>, List<DataPoint>> ComputeDRFromMSWS(List<double> msws, double bm_meterset, List<double> gantry_angles, double gantry_speed_max = 4.8, double DR_max = 2400)
         {
             var DRs = new List<DataPoint>();
             var GSs = new List<DataPoint>();
@@ -241,7 +231,7 @@ public static double cosmicFunc(double th_deg)
                 return a - (Math.Floor(a / n) * n);
             }
 
-            for (int i=1; i < msws.Count; i++)
+            for (int i = 1; i < msws.Count; i++)
             {
                 var mu_last = msws[i - 1] * bm_meterset;
                 var mu_current = msws[i] * bm_meterset;
@@ -251,7 +241,6 @@ public static double cosmicFunc(double th_deg)
                 var delta_gantry = Math.Abs(my_mod((delta_gantry0 + 180), 360) - 180);
                 var rot_time = delta_gantry / gantry_speed_max;
                 var calcd_mu_rate = (delta_mu * 60) / rot_time;
-
 
                 if (calcd_mu_rate < DR_max)
                 {
@@ -270,12 +259,13 @@ public static double cosmicFunc(double th_deg)
 
             return new Tuple<List<DataPoint>, List<DataPoint>>(DRs, GSs);
         }
- 
-        private List<double> GenerateMSWS (Beam bm, func f)
+
+        private List<double> GenerateMSWS(Beam bm, func f)
         {
             var msws = new List<double> { 0 };
 
-            if (bm.IsSetupField) {
+            if (bm.IsSetupField)
+            {
                 return msws;
             }
 
@@ -284,45 +274,43 @@ public static double cosmicFunc(double th_deg)
             var N = cps.Count();
             var dmsw = new List<double>();
 
-            for (int i=1; i<N; i++)
+            for (int i = 1; i < N; i++)
             {
-                var gan = (cps[i].GantryAngle + cps[i-1].GantryAngle) / 2;
+                var gan = (cps[i].GantryAngle + cps[i - 1].GantryAngle) / 2;
 
                 double arg = gan;
 
                 var delta = Math.Abs(f(arg));
-                
+
                 // Assert delta > 0
-                if (delta < 0) {
+                if (delta < 0)
+                {
                     throw new Exception("delta not gt 0!");
                 }
 
                 dmsw.Add(delta);
-                
             }
 
             var beta = dmsw.Sum();
-            for(int j=0; j<dmsw.Count; j++) 
-            { 
-                dmsw[j] /= beta; 
+            for (int j = 0; j < dmsw.Count; j++)
+            {
+                dmsw[j] /= beta;
             }
 
             //MessageBox.Show($"Sum of dmsw is {dmsw.Sum()}");
 
             // build msws
-            foreach(var delta in dmsw)
+            foreach (var delta in dmsw)
             {
                 msws.Add(msws.Last() + delta);
             }
 
             return msws;
-
         }
 
         private Tuple<List<DataPoint>, List<DataPoint>, List<DataPoint>>
-            ComputeDRBeam(Beam bm, double gantry_speed_max=4.8, double DR_max=2400) // Calculates current msws given an existing beam
+            ComputeDRBeam(Beam bm, double gantry_speed_max = 4.8, double DR_max = 2400) // Calculates current msws given an existing beam
         {
-
             var DRs = new List<DataPoint>();
             var dMU = new List<DataPoint>();
             var GSs = new List<DataPoint>();
@@ -352,8 +340,8 @@ public static double cosmicFunc(double th_deg)
                     var delta_mu = mu_current - mu_last;
 
                     // 2. Calc d(MU)/dt from the time it takes to move between cps
-                    
-                    var delta_gantry0 = cps[i].GantryAngle - cps[i-1].GantryAngle;
+
+                    var delta_gantry0 = cps[i].GantryAngle - cps[i - 1].GantryAngle;
                     var delta_gantry = Math.Abs(my_mod((delta_gantry0 + 180), 360) - 180); // corrected for passing 0/360 mark
 
                     //MessageBox.Show($"{delta_gantry0}, {delta_gantry}");
@@ -376,14 +364,12 @@ public static double cosmicFunc(double th_deg)
                         GSs.Add(new DataPoint(i, GS));
                     }
                     dMU.Add(new DataPoint(i, delta_mu));
-
                 }
             }
 
             return new Tuple<List<DataPoint>, List<DataPoint>, List<DataPoint>>(DRs, GSs, dMU);
         }
-    
-       
+
         private bool CheckIsClosed(Beam bm)
         {
             // Get the cps from beam
@@ -393,7 +379,7 @@ public static double cosmicFunc(double th_deg)
             foreach (var cp in cps)
             {
                 var leaves = cp.LeafPositions;
-                for(int i=0; i < 60; i++)
+                for (int i = 0; i < 60; i++)
                 {
                     var bankA = leaves[0, i];
                     var bankB = leaves[1, i];
@@ -409,7 +395,6 @@ public static double cosmicFunc(double th_deg)
 
         private void AddGap(Beam bm)
         {
-
             // Build leaf bank
             var leaves = new float[2, 60];
             for (int i = 0; i < 60; i++)
@@ -428,7 +413,7 @@ public static double cosmicFunc(double th_deg)
             bm.ApplyParameters(edits);
         }
 
-        private Tuple<ExternalPlanSetup, bool> ConvertToDynamic(ExternalPlanSetup plan, Course newcourse, bool toVmat=true)
+        private Tuple<ExternalPlanSetup, bool> ConvertToDynamic(ExternalPlanSetup plan, Course newcourse, bool toVmat = true)
         {
             var newplan = newcourse.CopyPlanSetup(plan) as ExternalPlanSetup;
             newplan.Id = "temp_dynamic";
@@ -442,7 +427,6 @@ public static double cosmicFunc(double th_deg)
 
             foreach (var bm in to_modify)
             {
-
                 // Get info about the beam
                 var angles = Utils.GetBeamAngles(bm);
 
@@ -479,7 +463,6 @@ public static double cosmicFunc(double th_deg)
                         primary_fluence_mode
                     );
 
-
                     var d_theta = 180 - Math.Abs(Math.Abs(gantry_angles.First() - gantry_angles.Last()) - 180);
                     if (bm.GantryDirection == GantryDirection.Clockwise)
                     {
@@ -501,7 +484,8 @@ public static double cosmicFunc(double th_deg)
                             couch_angles.First(),
                             bm.IsocenterPosition
                         );
-                    }else
+                    }
+                    else
                     {
                         // MSWS
                         var msws = new List<double>();
@@ -509,10 +493,9 @@ public static double cosmicFunc(double th_deg)
                         {
                             // Make 100 MSWS for now
                             msws.Add((double)i);
-                            
                         }
                         var max_msw = msws.Max();
-                        for (int j=0; j < msws.Count(); j++)
+                        for (int j = 0; j < msws.Count(); j++)
                         {
                             msws[j] /= max_msw;
                         }
@@ -537,7 +520,7 @@ public static double cosmicFunc(double th_deg)
                     var edits_new = new_bm.GetEditableParameters();
                     foreach (var cp in edits_new.ControlPoints)
                     {
-                        cp.LeafPositions = target_mlc; // Copy over mlc 
+                        cp.LeafPositions = target_mlc; // Copy over mlc
                         cp.JawPositions = target_jaws;
                     }
 
@@ -568,7 +551,6 @@ public static double cosmicFunc(double th_deg)
                 MessageBox.Show($"Converted {replaceCount} beams to dynamic arcs");
             }
             return new Tuple<ExternalPlanSetup, bool>(newplan, true);
-
         }
 
         private Tuple<string, string> GetFluenceEnergyMode(Beam bm)
@@ -584,7 +566,7 @@ public static double cosmicFunc(double th_deg)
                 primary_fluence_mode = energy_mode_splits[1];
             }
 
-            return new Tuple<string, string> (primary_fluence_mode, energy_mode_id);
+            return new Tuple<string, string>(primary_fluence_mode, energy_mode_id);
         }
 
         // Helper for copying beam
@@ -608,8 +590,6 @@ public static double cosmicFunc(double th_deg)
             var couch_angles = angles.Item3;
             var cps = angles.Item4;
 
-           
-
             var ebmp = new ExternalBeamMachineParameters(
                 bm.TreatmentUnit.Id,
                 energy_mode_id,
@@ -627,7 +607,6 @@ public static double cosmicFunc(double th_deg)
             {
                 plan = new_plan;
             }
-
 
             var new_bm = plan.AddVMATBeam(
                 ebmp,
@@ -658,7 +637,6 @@ public static double cosmicFunc(double th_deg)
                 var orig_plan = bm.Plan as ExternalPlanSetup;
                 orig_plan.RemoveBeam(bm);
             }
-
         }
 
         private string GetNewCourseID(Patient pat)
@@ -677,18 +655,16 @@ public static double cosmicFunc(double th_deg)
                 {
                     throw new Exception("Maximum new course index reached (99)");
                 }
-
             }
             return proposed_name;
         }
 
         private bool CheckValidMLC(IEnumerable<Beam> beams)
         {
-
             var hdstring = "Varian High Definition 120";
             var milstring = "Varian Millennium 120";
             var milstring2 = "Millennium 120";
-            foreach(var bm in beams.Where(b => !b.IsSetupField).ToList())
+            foreach (var bm in beams.Where(b => !b.IsSetupField).ToList())
             {
                 var mlc = bm.MLC;
                 if (mlc.Model != hdstring && mlc.Model != milstring && mlc.Model != milstring2)
@@ -697,7 +673,7 @@ public static double cosmicFunc(double th_deg)
                     return false;
                 }
             }
-            
+
             return true;
         }
 
@@ -732,7 +708,6 @@ public static double cosmicFunc(double th_deg)
                         return false;
                     }
                     return true;
-                    
                 }
                 else
                 {
@@ -747,10 +722,9 @@ public static double cosmicFunc(double th_deg)
                 return true;
             }
             return false;
-
         }
 
-        public void CreateNewPlanWithMethod(DRMethod method) // TODO fix deletion within loop crash by tagging all beams to delete (somehow) and then deleing them after loop
+        public void CreateNewPlanWithMethod(DRMethod method, GapSettings gapSettings) // TODO fix deletion within loop crash by tagging all beams to delete (somehow) and then deleing them after loop
         {
             // Check that we have a valid MLC
             if (!CheckValidMLC(Plan.Beams))
@@ -762,13 +736,11 @@ public static double cosmicFunc(double th_deg)
             var pat = Plan.Course.Patient;
             pat.BeginModifications();
 
-
             // Create new course with unique ID
             var newcourse = pat.AddCourse();
             newcourse.Id = GetNewCourseID(pat);
             var dt = DateTime.UtcNow.ToString("d");
 
-           
             // Create a copy of target plan in new course
             var newplan = newcourse.CopyPlanSetup(Plan) as ExternalPlanSetup;
             newplan.Id = Plan.Id;
@@ -782,7 +754,6 @@ public static double cosmicFunc(double th_deg)
 
             _app.SaveModifications();
 
-
             // Check static or dynamic (does the mlc have more than 2 control points)
             // If static convert to dynamic (copy pattern to every cp) (if dynamic do nothing)
             var unpack = ConvertToDynamic(newplan, newcourse);
@@ -794,12 +765,12 @@ public static double cosmicFunc(double th_deg)
                 MessageBox.Show("Exiting, cant perform DR edit on static plan.");
                 return; // Can't perform dr edit on a static plan
             }
-            
+
             _app.SaveModifications();
 
             // Compute the final DR using selected method
             CalcFinalDR(Plan, method);
-            
+
             // TODO remove the beams from newplan
             foreach (var copiedbeam in newplan.Beams.ToList())
             {
@@ -817,14 +788,44 @@ public static double cosmicFunc(double th_deg)
             {
                 newcourse.RemovePlanSetup(dynPlan);
             }
-            
+
+            if (gapSettings.EnableSlidingLeaf)
+            {
+                foreach (var b in newplan.Beams.Where(x => !x.IsSetupField))
+                {
+                    BeamParameters editableParameters = b.GetEditableParameters();
+
+                    float setPosition = -100F;
+                    float increment = 2.5F;
+                    foreach (var cp in b.ControlPoints)
+                    {
+                        ControlPointParameters editCP = editableParameters.ControlPoints.ElementAt(cp.Index);
+                        editCP.JawPositions = new VRect<double>(-15, -15, 15, 15);
+                        //editParams.SetJawPositions(new VRect<double>(beam.X1 ?? 50.0, beam.Y1 ?? 50.0, beam.X2 ?? -50.0, beam.Y2 ?? -50.0));
+                        editCP.LeafPositions = GetMLCPositions(cp.LeafPositions, setPosition, (float)gapSettings.SlidingLeafGapSize);
+                        b.ApplyParameters(editableParameters);
+                        setPosition += increment;
+                    }
+                }
+            }
+
 
             MessageBox.Show(
                 $"New plan created with id: {newplan.Id} in course {newcourse.Id}" +
                 $"\nExit Dose Rate Editor and reload patient in Eclipse." +
                 $"\nSelect new course and plan, calculate dose, and optionally review in Dose Rate Editor");
+        }
 
-            
+        private float[,] GetMLCPositions(float[,] originalLeaves, float setPosition, float slidingLeafGap)
+        {
+            // Copy original array
+            float[,] copyLeaves = (float[,])originalLeaves.Clone();
+
+            // Modify specific indices
+            copyLeaves[0, 0] = setPosition;
+            copyLeaves[1, 0] = slidingLeafGap + setPosition;
+
+            return copyLeaves;
         }
     }
 }

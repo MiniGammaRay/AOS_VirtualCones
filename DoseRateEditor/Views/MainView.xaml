@@ -39,59 +39,36 @@
                 Margin="10"
                 HorizontalAlignment="Center"
                 FontWeight="Bold">
-                Patient Id
+                Patient Id:
             </TextBlock>
-            <TextBox Margin="10" Text="{Binding PatientId}" />
-            <Button
+            <Label
                 Margin="10"
-                Command="{Binding OpenPatientCommand}"
-                Content="Open Patient" />
+                HorizontalAlignment="Center"
+                Content="{Binding SelectedPatient.Name}" />
 
             <TextBlock
                 Margin="10"
                 HorizontalAlignment="Center"
                 FontWeight="Bold">
-                Courses
+                Course:
             </TextBlock>
-            <ComboBox
-                x:Name="CourseListBox"
+            <Label
                 Margin="10"
-                ItemsSource="{Binding Courses}"
-                SelectedItem="{Binding SelectedCourse, Mode=TwoWay}">
-                <ie:Interaction.Triggers>
-                    <ie:EventTrigger EventName="SelectionChanged">
-                        <ie:InvokeCommandAction Command="{Binding ViewCourseCommand}" />
-                    </ie:EventTrigger>
-                </ie:Interaction.Triggers>
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Id}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
+                HorizontalAlignment="Center"
+                Content="{Binding SelectedCourse.Id}" />
+
 
             <TextBlock
                 Margin="10"
                 HorizontalAlignment="Center"
                 FontWeight="Bold">
-                Plans
+                Plan:
             </TextBlock>
-            <ComboBox
+            <Label
                 Margin="10"
-                ItemsSource="{Binding Plans}"
-                SelectedItem="{Binding SelectedPlan, Mode=TwoWay}">
-                <ie:Interaction.Triggers>
-                    <ie:EventTrigger EventName="SelectionChanged">
-                        <ie:InvokeCommandAction Command="{Binding OnPlanSelectCommand}" />
-                    </ie:EventTrigger>
-                </ie:Interaction.Triggers>
-                <ComboBox.ItemTemplate>
-                    <DataTemplate>
-                        <TextBlock Text="{Binding Id}" />
-                    </DataTemplate>
-                </ComboBox.ItemTemplate>
-            </ComboBox>
-
+                Content="{Binding SelectedPlan.Id, Mode=TwoWay}"
+                HorizontalAlignment="Center"/>
+           
             <TextBlock
                 Margin="10"
                 HorizontalAlignment="Center"

@@ -140,6 +140,8 @@
     <Compile Include="Models\CosmoTrans.cs" />
     <Compile Include="Models\CourseModel.cs" />
     <Compile Include="Models\DRCalculator.cs" />
+    <Compile Include="Models\MLC.cs" />
+    <Compile Include="Models\GapSettings.cs" />
     <Compile Include="Models\StructureFitting.cs" />
     <Compile Include="Models\StructureInfo.cs" />
     <Compile Include="Models\Utils.cs" />
