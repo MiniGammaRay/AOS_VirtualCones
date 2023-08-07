@@ -20,9 +20,12 @@ namespace DoseRateEditor.Models
             // Juha
         }
 
+        public string TargetCourseId = "Virtual Cones";
+
         private static string sincred = @"
-Richard A. Popple, Xingen Wu, Ivan A. Brezovich, James M. Markert
-, Barton L. Guthrie, Evan M. Thomas, Markus Bredel, John B. Fiveash,
+Richard A. Popple, Xingen Wu, Ivan A. Brezovich
+, James M. Markert, Barton L. Guthrie,
+Evan M. Thomas, Markus Bredel, John B. Fiveash,
 The virtual cone: A novel technique to generate
 spherical dose distributions using
 a multileaf collimator and standardized control-point
@@ -33,7 +36,8 @@ Volume 3, Issue 3,
 Pages 421-430,
 ISSN 2452-1094,
 https://doi.org/10.1016/j.adro.2018.02.011.
-(https://www.sciencedirect.com/science/article/pii/S2452109418300368)" + "\n\nDR(gantry) = Math.Sin((gantry * Math.PI) / 180);";
+(https://www.sciencedirect.com/science/article/pii/S2452109418300368)"
++ "\n\nDR(gantry) = Math.Sin((gantry * Math.PI) / 180);";
 
         private static string bfstring = @"""
 public static double BFFunc(double th_deg)
@@ -643,19 +647,45 @@ public static double cosmicFunc(double th_deg)
         {
             // Rename course
             string proposed_name = null;
-            for (int n = 1; n < 100; n++)
+            proposed_name = TargetCourseId;
+            //for (int n = 1; n < 100; n++)
+            //{
+            //    proposed_name = $"EditDR_{n}";
+            //    if (pat.Courses.Count(c => c.Id == proposed_name) == 0) // If we don't find that name
+            //    {
+            //        // use proposed name and break the loop
+            //        break;
+            //    }
+            //    else if (n == 99)
+            //    {
+            //        throw new Exception("Maximum new course index reached (99)");
+            //    }
+            //}
+            return proposed_name;
+        }
+
+        public string GetNewPlanId(Course course, string originalID)
+        {
+            string proposed_name = originalID;
+
+            if (course.PlanSetups.Count(p => p.Id.ToUpper() == proposed_name.ToUpper()) != 0)
             {
-                proposed_name = $"EditDR_{n}";
-                if (pat.Courses.Count(c => c.Id == proposed_name) == 0) // If we don't find that name
+                MessageBox.Show($"{proposed_name} found");
+                for (int n = 1; n < 100; n++)
                 {
-                    // use proposed name and break the loop
-                    break;
-                }
-                else if (n == 99)
-                {
-                    throw new Exception("Maximum new course index reached (99)");
+                    proposed_name = $"{proposed_name}_{n}";
+                    if (course.PlanSetups.Count(p => p.Id.ToUpper() == proposed_name.ToUpper()) == 0) // If we don't find that name
+                    {
+                        // use proposed name and break the loop
+                        break;
+                    }
+                    else if (n == 99)
+                    {
+                        throw new Exception("Maximum new plan index reached (99)");
+                    }
                 }
             }
+
             return proposed_name;
         }
 
@@ -737,13 +767,26 @@ public static double cosmicFunc(double th_deg)
             pat.BeginModifications();
 
             // Create new course with unique ID
-            var newcourse = pat.AddCourse();
-            newcourse.Id = GetNewCourseID(pat);
-            var dt = DateTime.UtcNow.ToString("d");
 
+            Course newcourse = null;
+            if (pat.Courses.Count(c => c.Id.ToUpper().Equals(TargetCourseId.ToUpper())) == 0)
+            {
+                newcourse = pat.AddCourse();
+                newcourse.Id = GetNewCourseID(pat);
+                var dt = DateTime.UtcNow.ToString("d");
+            }
+            else
+            {
+                newcourse = pat.Courses.First(c => c.Id.ToUpper().Equals(TargetCourseId.ToUpper()));
+            }
             // Create a copy of target plan in new course
             var newplan = newcourse.CopyPlanSetup(Plan) as ExternalPlanSetup;
-            newplan.Id = Plan.Id;
+
+            _app.SaveModifications();
+
+            //It appears that the CopPlan method auto increments, so no need to do it manually.
+            // string newPlanId = GetNewPlanId(newcourse, Plan.Id);
+            // newplan.Id = newPlanId;
 
             // Check closed (ON NEW PLAN!)
             bool isClosed = CheckClosed(pat, newplan);
@@ -808,7 +851,6 @@ public static double cosmicFunc(double th_deg)
                     }
                 }
             }
-
 
             MessageBox.Show(
                 $"New plan created with id: {newplan.Id} in course {newcourse.Id}" +
